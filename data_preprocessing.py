@@ -48,8 +48,9 @@ def resize_bbox(bbox, original_size, target_size):
 
 # Function to lead the .mat file using h5py
 def load_dataset():
-    train_set_X = tf.zeros((33402, 640, 640, 3), dtype=tf.uint8)
-    train_set_Y = tf.zeros((19, 19, 30))
+    num_samples = 33402
+    train_set_X = np.zeros((num_samples, 640, 640, 3), dtype=np.uint8)
+    train_set_Y = np.zeros((num_samples, 19, 19, 30))  # Adjust the shape as needed
     with h5py.File(file_path, 'r') as f:
         digitStruct = f['digitStruct']
         names = digitStruct['name']
@@ -69,9 +70,8 @@ def load_dataset():
 
             # Resize image
             resized_image = cv2.resize(image, target_size)
-            resized_image_path = os.path.join(images_folder, f"resized_{image_name}")
-            if i == 0:
-                cv2.imwrite(resized_image_path, resized_image)
+            
+            # Assign resized image to training set array
             train_set_X[i] = resized_image
 
             # Get bounding box data
@@ -80,9 +80,17 @@ def load_dataset():
 
             # Resize bounding box data
             resized_bbox_data = resize_bbox(bbox_data, original_size, target_size)
+            if i == 0:
+                print(resized_bbox_data['height'])
+                print(resized_bbox_data['width'])
 
             if i%1000 == 0:
                 print(f"Processed {image_name}")
                 print("Original bbox data:", bbox_data)
                 print("Resized bbox data:", resized_bbox_data)
+    train_set_X = tf.convert_to_tensor(train_set_X, dtype=tf.uint8)
+    train_set_Y = tf.convert_to_tensor(train_set_Y)
+    
     return train_set_X, train_set_Y
+
+load_dataset()
