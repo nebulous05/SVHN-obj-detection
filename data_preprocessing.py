@@ -39,6 +39,7 @@ def resize_bbox(bbox, original_size, target_size):
     resized_bbox['width'] = x_scale * bbox['width']
     resized_bbox['left'] = x_scale * bbox['left']
     resized_bbox['top'] = y_scale * bbox['top']
+    resized_bbox['label'] = bbox['label']
     
     return resized_bbox
 
@@ -133,21 +134,23 @@ def load_dataset(file_path, images_folder, target_size=(640, 640)):
             # Get bounding box data
             bbox_ref = bboxes[i][0]
             bbox_data_list = extract_bboxes(f, bbox_ref)
-
-            print(bbox_data_list[0])
-
+            
             # Process each bounding box
             for bbox_data in bbox_data_list:
                 # Resize bounding box data
                 resized_bbox_data = resize_bbox(bbox_data, original_size, target_size)
-
+                
                 # Assign bounding boxes to anchor boxes and store in train_set_Y
                 best_anchor_idx = find_best_anchor(resized_bbox_data, anchor_boxes)
                 grid_x, grid_y = get_grid_position(resized_bbox_data, target_size)
 
-                train_set_Y[i, grid_x, grid_y, best_anchor_idx * 5:(best_anchor_idx + 1) * 5] = [
+                # extra label from bbox_data
+                label = resized_bbox_data['label']
+                train_set_Y[i, grid_x, grid_y, best_anchor_idx * 15:(best_anchor_idx + 1) * 15] = [
                     1,  # object confidence
-                    resized_bbox_data['left'], resized_bbox_data['top'], resized_bbox_data['width'], resized_bbox_data['height']
+                    resized_bbox_data['left'], resized_bbox_data['top'], resized_bbox_data['width'], resized_bbox_data['height'],
+                    int(label==10), int(label==9), int(label==8), int(label==7), int(label==6), int(label==5), int(label==4),
+                    int(label==3), int(label==2), int(label==1)
                 ]
 
             if i%1000 == 0:
