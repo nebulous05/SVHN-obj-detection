@@ -9,6 +9,8 @@ def read_string(string):
     # Convert byte array to string
     return ''.join(chr(c[0]) for c in string if c != 0)
 
+# Function to extract a list of dictionaries representing
+# the bounding box information for a particular image
 def extract_bboxes(f, bbox_ref):
     bbox = f[bbox_ref]
     bboxes = []
@@ -66,7 +68,7 @@ def calculate_iou(box1, box2):
 
     return inter_area / union_area if union_area != 0 else 0
 
-def find_best_anchor(bbox, anchor_boxes):
+def find_best_anchor(bbox, anchor_boxes, grid_center):
     """
     Find the best anchor box based on the highest IoU with the given bounding box.
     """
@@ -75,17 +77,25 @@ def find_best_anchor(bbox, anchor_boxes):
     bbox_x_max, bbox_y_max = bbox_x_min + bbox_width, bbox_y_min + bbox_height
     bbox_coords = [bbox_x_min, bbox_y_min, bbox_x_max, bbox_y_max]
 
+    grid_center_x, grid_center_y = grid_center
+
     best_anchor_idx = 0
     best_iou = 0
 
     for idx, (anchor_w, anchor_h) in enumerate(anchor_boxes):
-        anchor_coords = [0, 0, anchor_w, anchor_h]  # Assuming anchors are centered at (0,0)
+        anchor_x_min = grid_center_x - anchor_w / 2
+        anchor_y_min = grid_center_y - anchor_h / 2
+        anchor_x_max = grid_center_x + anchor_w / 2
+        anchor_y_max = grid_center_y + anchor_h / 2
+        anchor_coords = [anchor_x_min, anchor_y_min, anchor_x_max, anchor_y_max]
+
         iou = calculate_iou(bbox_coords, anchor_coords)
         if iou > best_iou:
             best_iou = iou
             best_anchor_idx = idx
 
     return best_anchor_idx
+
 
 def get_grid_position(bbox, target_size):
     # Determine the grid position for the bounding box center
@@ -100,14 +110,18 @@ def get_grid_position(bbox, target_size):
     return grid_x, grid_y
 
 # Function to lead the .mat file using h5py
+# Note: this is only for training set currently
 def load_dataset(file_path, images_folder, target_size=(640, 640)):
     num_samples = 33402
     train_set_X = np.zeros((num_samples, 640, 640, 3), dtype=np.uint8)
     train_set_Y = np.zeros((num_samples, 19, 19, 30))
+    # anchor boxes can be improved with K means ...
+    # still need to look into what that means & how to do it
     anchor_boxes = [
         [80, 160],  # Tall and thin box (width, height)
         [160, 80]   # Short and wide box (width, height)
     ]
+    # open the file with h5py
     with h5py.File(file_path, 'r') as f:
         digitStruct = f['digitStruct']
         names = digitStruct['name']
@@ -128,7 +142,7 @@ def load_dataset(file_path, images_folder, target_size=(640, 640)):
             # Resize image
             resized_image = cv2.resize(image, target_size)
             
-            # Assign resized image to training set array
+            # Assign resized image to location in train_set_X tensor
             train_set_X[i] = resized_image
 
             # Get bounding box data
@@ -141,16 +155,16 @@ def load_dataset(file_path, images_folder, target_size=(640, 640)):
                 resized_bbox_data = resize_bbox(bbox_data, original_size, target_size)
                 
                 # Assign bounding boxes to anchor boxes and store in train_set_Y
-                best_anchor_idx = find_best_anchor(resized_bbox_data, anchor_boxes)
                 grid_x, grid_y = get_grid_position(resized_bbox_data, target_size)
+                best_anchor_idx = find_best_anchor(resized_bbox_data, anchor_boxes)
 
                 # extra label from bbox_data
                 label = resized_bbox_data['label']
                 train_set_Y[i, grid_x, grid_y, best_anchor_idx * 15:(best_anchor_idx + 1) * 15] = [
                     1,  # object confidence
                     resized_bbox_data['left'], resized_bbox_data['top'], resized_bbox_data['width'], resized_bbox_data['height'],
-                    int(label==10), int(label==9), int(label==8), int(label==7), int(label==6), int(label==5), int(label==4),
-                    int(label==3), int(label==2), int(label==1)
+                    int(label==10), int(label==1), int(label==2), int(label==3), int(label==4), int(label==5), int(label==6),
+                    int(label==7), int(label==8), int(label==9)
                 ]
 
             if i%1000 == 0:
