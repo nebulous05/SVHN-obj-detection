@@ -109,6 +109,23 @@ def get_grid_position(bbox, target_size):
 
     return grid_x, grid_y
 
+def normalize_bbox(resized_bbox_data, grid_x, grid_y, grid_size, img_size):
+    # Calculate grid cell size
+    grid_width = img_size[0] / grid_size[0]
+    grid_height = img_size[1] / grid_size[1]
+    
+    # Calculate offsets for normalization
+    left_x_of_grid_cell = grid_x * grid_width
+    top_y_of_grid_cell = grid_y * grid_height
+
+    # Calculate normalized values
+    normalized_x = (resized_bbox_data['left'] + resized_bbox_data['width'] / 2 - left_x_of_grid_cell) / grid_width
+    normalized_y = (resized_bbox_data['top'] + resized_bbox_data['height'] / 2 - top_y_of_grid_cell) / grid_height
+    normalized_w = resized_bbox_data['width'] / img_size[0]
+    normalized_h = resized_bbox_data['height'] / img_size[1]
+
+    return normalized_x, normalized_y, normalized_w, normalized_h
+
 # Function to lead the .mat file using h5py
 # Note: this is only for training set currently
 def load_dataset(file_path, images_folder, target_size=(640, 640)):
@@ -158,11 +175,14 @@ def load_dataset(file_path, images_folder, target_size=(640, 640)):
                 grid_x, grid_y = get_grid_position(resized_bbox_data, target_size)
                 best_anchor_idx = find_best_anchor(resized_bbox_data, anchor_boxes)
 
+                # grab normalized values
+                normalized_x, normalized_y, normalized_w, normalized_h = normalize_bbox(resized_bbox_data, grid_x, grid_y, (19, 19), (640, 640))
+
                 # extra label from bbox_data
                 label = resized_bbox_data['label']
                 train_set_Y[i, grid_x, grid_y, best_anchor_idx * 15:(best_anchor_idx + 1) * 15] = [
                     1,  # object confidence
-                    resized_bbox_data['left'], resized_bbox_data['top'], resized_bbox_data['width'], resized_bbox_data['height'],
+                    normalized_x, normalized_y, normalized_w, normalized_h,
                     int(label==10), int(label==1), int(label==2), int(label==3), int(label==4), int(label==5), int(label==6),
                     int(label==7), int(label==8), int(label==9)
                 ]
