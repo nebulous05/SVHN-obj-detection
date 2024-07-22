@@ -43,8 +43,61 @@ def create_yolo_model(input_shape=(640, 640, 3), grid_size=19, num_anchors=2, nu
     model = models.Model(inputs, outputs)
     return model
 
-# Create the YOLO model
-yolo_model = create_yolo_model()
+def yolo_loss(y_true, y_pred, grid_size, num_classes):
+    """
+    YOLO loss function that only includes bbox_loss and class_loss when object confidence is 1.
 
-# Print the model summary
-yolo_model.summary()
+    Args:
+    - y_true: Tensor of shape (batch_size, grid_size, grid_size, num_anchors * (5 + num_classes))
+    - y_pred: Tensor of shape (batch_size, grid_size, grid_size, num_anchors * (5 + num_classes))
+    - grid_size: Tuple of integers (height, width) representing the grid size (e.g., (19, 19))
+    - num_classes: Integer representing the number of classes
+
+    Returns:
+    - total_loss: Tensor representing the total loss
+    """
+    
+    # Unpack ground truth and predictions
+    object_mask = y_true[..., 0]
+    true_bbox = y_true[..., 1:5]
+    true_class = y_true[..., 5:]
+
+    pred_object = y_pred[..., 0]
+    pred_bbox = y_pred[..., 1:5]
+    pred_class = y_pred[..., 5:]
+
+    # Objectness Loss: Binary cross-entropy between objectness scores
+    objectness_loss = tf.reduce_sum(
+        tf.keras.losses.binary_crossentropy(object_mask, pred_object)
+    )
+
+    # Bounding Box Loss: Mean squared error between predicted and true bounding box coordinates
+    bbox_loss = tf.reduce_sum(
+        object_mask * tf.reduce_sum(tf.square(true_bbox - pred_bbox), axis=-1)
+    )
+
+    # Class Loss: Binary cross-entropy between class predictions
+    class_loss = tf.reduce_sum(
+        object_mask * tf.keras.losses.binary_crossentropy(true_class, pred_class)
+    )
+
+    # Total loss: Combining all the losses
+    total_loss = objectness_loss + bbox_loss + class_loss
+
+    return total_loss
+
+model = create_yolo_model()
+model.summary()
+
+model.compile(optimizer='adam', loss=lambda y_true, y_pred: yolo_loss(y_true, y_pred, grid_size=(19, 19), num_classes=10))
+
+train_set_X = tf.zeros((33402, 640, 640, 3))
+train_set_Y = tf.zeros((33402, 19, 19, 30))
+
+# Assuming train_set_X and train_set_Y are your input and target tensors
+history = model.fit(
+    train_set_X, train_set_Y,
+    epochs=10,  # Adjust as needed
+    batch_size=32,  # Adjust as needed
+    validation_split=0.1  # Adjust as needed
+)
