@@ -8,9 +8,21 @@ from tensorflow.keras.layers import Lambda
 from tensorflow.keras.layers import concatenate
 from tensorflow.keras.models import Model
 
-from ..utils import compose
+# from ..utils import compose
+from functools import reduce
 from .keras_darknet19 import (DarknetConv2D, DarknetConv2D_BN_Leaky,
                               darknet_body)
+
+def compose(*funcs):
+    """Compose arbitrarily many functions, evaluated left to right.
+
+    Reference: https://mathieularose.com/function-composition-in-python/
+    """
+    # return lambda x: reduce(lambda v, f: f(v), funcs, x)
+    if funcs:
+        return reduce(lambda f, g: lambda *a, **kw: g(f(*a, **kw)), funcs)
+    else:
+        raise ValueError('Composition of empty sequence not supported.')
 
 sys.path.append('..')
 
